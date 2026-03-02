@@ -1,12 +1,23 @@
 import { apiSlice } from "../apiSlice";
 
-
-
-export interface SendMessageRequest {
-  radioId: number; // Changed from string to number
-  messageType: "UNICAST" | "BROADCAST" | "GROUP";
+export interface SendUnicastRequest {
+  radioId: number;
+  messageType: "UNICAST";
   message: string;
 }
+
+export interface SendMulticastRequest {
+  radioIds: number[];
+  messageType: "MULTICAST";
+  message: string;
+}
+
+export interface SendBroadcastRequest {
+  messageType: "BROADCAST";
+  message: string;
+}
+
+export type SendMessageRequest = SendUnicastRequest | SendMulticastRequest | SendBroadcastRequest;
 
 export interface SendMessageResponse {
   success: boolean;
@@ -27,8 +38,6 @@ export interface MessageData {
   isRead?: boolean;
 }
 
-
-
 interface ApiResponse {
   success: boolean;
   message: string;
@@ -46,43 +55,56 @@ const recursiveExtractMessages = (data: any): MessageData[] => {
 export const MessageOperationsApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     sendMessage: builder.mutation<SendMessageResponse, SendMessageRequest>({
-      query: (body) => ({
-        url: '/api/tlv/message/send',
-        method: 'POST',
-        body,
-      }),
-      invalidatesTags: ['MessageOperations'],
+      query: (body) => {
+        // Determine the endpoint based on messageType
+        let url = "";
+        
+        if (body.messageType === "UNICAST") {
+          url = "/api/tlv/message/send";
+        } else if (body.messageType === "MULTICAST") {
+          url = "/api/tlv/message/multicast";
+        } else if (body.messageType === "BROADCAST") {
+          url = "/api/tlv/message/broadcast";
+        }
+        
+        return {
+          url,
+          method: "POST",
+          body,
+        };
+      },
+      invalidatesTags: ["MessageOperations"],
     }),
-    sendEmergencyMessage: builder.mutation<SendMessageResponse, Omit<SendMessageRequest, 'message'> & { message?: string }>({
+    
+    sendEmergencyMessage: builder.mutation<SendMessageResponse, Omit<SendUnicastRequest, 'message'> & { message?: string }>({
       query: (body) => ({
-        url: '/api/tlv/message/send',
-        method: 'POST',
+        url: "/api/tlv/message/send",
+        method: "POST",
         body: {
           ...body,
-          message: body.message || 'EMERGENCY: Immediate assistance required!',
+          message: body.message || "EMERGENCY: Immediate assistance required!",
         },
       }),
-      invalidatesTags: ['MessageOperations'],
+      invalidatesTags: ["MessageOperations"],
     }),
+    
     getMessageInbox: builder.query<MessageData[], number>({
       query: (index) => ({
-        url: '/api/tlv/query/message-status',
-        method: 'POST',
+        url: "/api/tlv/query/message-status",
+        method: "POST",
         body: { index },
       }),
       transformResponse: (response: ApiResponse) => recursiveExtractMessages(response.data),
-      providesTags: ['MessageOperations'],
+      providesTags: ["MessageOperations"],
     }),
 
     getMessageOutbox: builder.query<MessageData[], void>({
-      query: () => '/api/tlv/query/message-outbox',
+      query: () => "/api/tlv/query/message-outbox",
       transformResponse: (response: ApiResponse) => recursiveExtractMessages(response.data),
-      providesTags: ['MessageOperations'],
+      providesTags: ["MessageOperations"],
     }),
   }),
 });
-
-
 
 export const {
   useSendMessageMutation,

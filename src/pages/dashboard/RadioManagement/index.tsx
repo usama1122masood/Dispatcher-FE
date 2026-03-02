@@ -1,26 +1,20 @@
 import React, { useState, useMemo } from "react";
 import { Table, Tag, Dropdown, Button, Space, message } from "antd";
-
 import type { MenuProps } from "antd";
-
 import {
   MoreOutlined,
   SignalFilled,
   EnvironmentOutlined,
   RadiusSettingOutlined,
   EyeOutlined,
-  EditOutlined,
+  SettingOutlined,
   ApiOutlined,
-  ReloadOutlined,
   SyncOutlined,
-  ToolOutlined,
-  ControlOutlined,
   ClockCircleOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import BatteryFilled from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { CustomButton } from "../../../components/ui/CustomButton";
 import { CustomSearch } from "../../../components/ui/CustomInput";
 import { useAppSelector } from "../../../store/hooks";
 import { selectIsDarkMode } from "../../../store/slices/Themeslice";
@@ -29,8 +23,11 @@ import {
   useCallServiceMutation,
 } from "../../../store/api/radioManagementApi";
 import AddDeviceModal, { type DeviceFormValues } from "./AddDeviceModal";
+import ViewDetailsModal from "./AddDeviceModal/ViewDetailsModal";
+import RadioConfigModal from "./RadioConfigModal";
 import { POLLING_INTERVAL } from "../../../utils/global";
 
+// Keep these interfaces here
 export interface RadioDevice {
   key: string;
   name: string;
@@ -51,25 +48,26 @@ const RadioManagement: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [searchText, setSearchText] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isViewDetailsOpen, setIsViewDetailsOpen] = useState<boolean>(false);
+  const [isRadioConfigOpen, setIsRadioConfigOpen] = useState<boolean>(false);
+  const [selectedDevice, setSelectedDevice] = useState<RadioDevice | null>(null);
   const isDarkMode = useAppSelector(selectIsDarkMode);
 
   const { data: radioDevices = [], isLoading } = useGetRadioDevicesQuery(
     undefined,
     {
-      pollingInterval: POLLING_INTERVAL, // 5 seconds
-      skipPollingIfUnfocused: true, // stops when tab is inactive
+      pollingInterval: POLLING_INTERVAL,
+      skipPollingIfUnfocused: true,
     }
   );
 
   const [callService] = useCallServiceMutation();
 
-  // Calculate stats from radioDevices list
   const stats = useMemo(() => {
     const active = radioDevices.filter((device: RadioDevice) => device.status === "online").length;
     const warnings = radioDevices.filter((device: RadioDevice) => device.status === "warning").length;
     const errors = radioDevices.filter((device: RadioDevice) => device.status === "error").length;
     
-    // Calculate average signal strength
     const signalValues = radioDevices
       .map((device: RadioDevice) => {
         const match = device.signalStrength.match(/-?\d+/);
@@ -89,16 +87,28 @@ const RadioManagement: React.FC = () => {
     };
   }, [radioDevices]);
 
-  const getMenuItems = (): MenuProps["items"] => [
+  const handleViewDetails = (device: RadioDevice) => {
+    setSelectedDevice(device);
+    setIsViewDetailsOpen(true);
+  };
+
+  const handleRadioConfig = (device: RadioDevice) => {
+    setSelectedDevice(device);
+    setIsRadioConfigOpen(true);
+  };
+
+  const getMenuItems = (device: RadioDevice): MenuProps["items"] => [
     {
       key: "view",
       label: "View Details",
       icon: <EyeOutlined />,
+      onClick: () => handleViewDetails(device),
     },
     {
-      key: "edit",
-      label: "Edit Device",
-      icon: <EditOutlined />,
+      key: "radio_config",
+      label: "Radio Configuration",
+      icon: <SettingOutlined />,
+      onClick: () => handleRadioConfig(device),
     },
     {
       key: "ping",
@@ -107,28 +117,10 @@ const RadioManagement: React.FC = () => {
       onClick: () => handleCallSerice({ serviceType: "Ping/ test Connection" }),
     },
     {
-      key: "reboot",
-      label: "Reboot Device",
-      icon: <ReloadOutlined />,
-      onClick: () => handleCallSerice({ serviceType: "Reboot Device" }),
-    },
-    {
       key: "refresh",
       label: "Refresh Status",
       icon: <SyncOutlined />,
       onClick: () => handleCallSerice({ serviceType: "Refresh Status" }),
-    },
-    {
-      key: "diagnostics",
-      label: "Run Diagnostics",
-      icon: <ToolOutlined />,
-      onClick: () => handleCallSerice({ serviceType: "Run Diagnostics" }),
-    },
-    {
-      key: "calibrate",
-      label: "Calibrate Signal",
-      icon: <ControlOutlined />,
-      onClick: () => handleCallSerice({ serviceType: "Calibrate Signal" }),
     },
     {
       key: "sync",
@@ -151,12 +143,6 @@ const RadioManagement: React.FC = () => {
         </Space>
       ),
     },
-    // {
-    //   title: "Sector",
-    //   dataIndex: "sector",
-    //   key: "sector",
-    //   sorter: (a, b) => a.sector.localeCompare(b.sector),
-    // },
     {
       title: "Status",
       dataIndex: "status",
@@ -256,15 +242,14 @@ const RadioManagement: React.FC = () => {
       title: "",
       key: "action",
       width: 50,
-      render: () => (
-        <Dropdown menu={{ items: getMenuItems() }} trigger={["click"]}>
+      render: (_, record) => (
+        <Dropdown menu={{ items: getMenuItems(record) }} trigger={["click"]}>
           <Button type="text" icon={<MoreOutlined />} />
         </Dropdown>
       ),
     },
   ];
 
-  // Filter data based on active filter
   const filteredData = radioDevices.filter((item: RadioDevice) => {
     const matchesFilter =
       activeFilter === "all" || item.status === activeFilter;
@@ -289,8 +274,6 @@ const RadioManagement: React.FC = () => {
 
   const handleAddDevice = (values: DeviceFormValues) => {
     console.log("New device added:", values);
-    // Here you would typically make an API call to add the device
-    // For now, we just log the values
   };
 
   return (
@@ -323,10 +306,6 @@ const RadioManagement: React.FC = () => {
               }}
             />
 
-            {/* <CustomButton
-              label="Add Device"
-              onClick={() => setIsModalOpen(true)}
-            /> */}
             <Button type="primary" size="large" onClick={() => setIsModalOpen(true)}>
               <PlusOutlined />
               Add Device
@@ -400,8 +379,6 @@ const RadioManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* Search and Add Device */}
-
         {/* Filter Buttons */}
         <div className="mb-4 flex justify-end">
           <Space>
@@ -451,6 +428,24 @@ const RadioManagement: React.FC = () => {
         open={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleAddDevice}
+      />
+
+      <ViewDetailsModal
+        open={isViewDetailsOpen}
+        onClose={() => {
+          setIsViewDetailsOpen(false);
+          setSelectedDevice(null);
+        }}
+        device={selectedDevice}
+      />
+
+      <RadioConfigModal
+        open={isRadioConfigOpen}
+        onClose={() => {
+          setIsRadioConfigOpen(false);
+          setSelectedDevice(null);
+        }}
+        device={selectedDevice}
       />
     </div>
   );
