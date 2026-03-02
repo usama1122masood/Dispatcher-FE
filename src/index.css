@@ -1,0 +1,358 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+/* Communications Tabs Styling */
+.communications-tabs .ant-tabs-nav {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.communications-tabs .ant-tabs-nav::before {
+  border-bottom: none !important;
+}
+
+.communications-tabs .ant-tabs-tab {
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  margin: 0 !important;
+  color: var(--ant-color-text-secondary) !important;
+}
+
+.communications-tabs .ant-tabs-tab-active {
+  color: var(--ant-color-primary) !important;
+}
+
+.communications-tabs .ant-tabs-tab:hover {
+  color: var(--ant-color-primary) !important;
+}
+
+.communications-tabs .ant-tabs-ink-bar {
+  height: 2px !important;
+  background: var(--ant-color-primary) !important;
+}
+/* Global styles for Ant Design components in dark mode */
+
+/* Collapse/Accordion Dark Mode */
+.dark .ant-collapse {
+  background: transparent;
+  border: none;
+}
+
+.dark .ant-collapse-item {
+  background-color: #1f2937;
+  border: 1px solid #374151;
+}
+
+.dark .ant-collapse-header {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
+
+.dark .ant-collapse-content {
+  background-color: #1f2937;
+  border-top: 1px solid #374151;
+}
+
+.dark .ant-collapse-arrow {
+  color: #9ca3af;
+}
+
+.dark .ant-collapse-item-active .ant-collapse-arrow {
+  color: #60a5fa;
+}
+
+/* Table Dark Mode */
+.dark .ant-table {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
+
+.dark .ant-table-thead > tr > th {
+  background-color: #374151;
+  color: #f9fafb;
+  border-bottom: 1px solid #4b5563;
+}
+
+.dark .ant-table-tbody > tr {
+  background-color: #1f2937;
+  border-bottom: 1px solid #374151;
+}
+
+.dark .ant-table-tbody > tr:hover > td {
+  background-color: #374151;
+}
+
+.dark .ant-table-tbody > tr > td {
+  border-bottom: 1px solid #374151;
+  color: #f9fafb;
+}
+
+/* Pagination Dark Mode */
+.dark .ant-pagination-item {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.dark .ant-pagination-item a {
+  color: #f9fafb;
+}
+
+.dark .ant-pagination-item-active {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.dark .ant-pagination-item-active a {
+  color: #ffffff;
+}
+
+.dark .ant-pagination-prev .ant-pagination-item-link,
+.dark .ant-pagination-next .ant-pagination-item-link {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #f9fafb;
+}
+
+/* Tabs Dark Mode */
+.dark .ant-tabs-nav::before {
+  border-bottom-color: #374151;
+}
+
+.dark .ant-tabs-tab {
+  color: #9ca3af;
+}
+
+.dark .ant-tabs-tab:hover {
+  color: #f9fafb;
+}
+
+.dark .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #60a5fa;
+}
+
+.dark .ant-tabs-ink-bar {
+  background: #60a5fa;
+}
+
+/* Select Dark Mode */
+.dark .ant-select-selector {
+  background-color: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #f9fafb !important;
+}
+
+.dark .ant-select-arrow {
+  color: #9ca3af;
+}
+
+.dark .ant-select-dropdown {
+  background-color: #1f2937;
+}
+
+.dark .ant-select-item {
+  color: #f9fafb;
+}
+
+.dark .ant-select-item-option-active {
+  background-color: #374151;
+}
+
+.dark .ant-select-item-option-selected {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+/* Button Dark Mode */
+.dark .ant-btn-default {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #f9fafb;
+}
+
+.dark .ant-btn-default:hover {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #f9fafb;
+}
+
+/* Progress Bar Dark Mode */
+.dark .ant-progress-inner {
+  background-color: #374151;
+}
+
+/* Slider Dark Mode */
+.dark .ant-slider-rail {
+  background-color: #374151;
+}
+
+.dark .ant-slider-track {
+  background-color: #3b82f6;
+}
+
+.dark .ant-slider-handle {
+  border-color: #3b82f6;
+  background-color: #3b82f6;
+}
+
+.dark .ant-slider-handle:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.2);
+}
+
+/* Badge Dark Mode */
+.dark .ant-badge-count {
+  box-shadow: 0 0 0 1px #1f2937;
+}
+
+/* Input Dark Mode */
+.dark .ant-input {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #f9fafb;
+}
+
+.dark .ant-input:hover {
+  border-color: #4b5563;
+}
+
+.dark .ant-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Typography Dark Mode */
+.dark .ant-typography {
+  color: #f9fafb;
+}
+
+.dark .ant-typography-secondary {
+  color: #9ca3af;
+}
+
+/* Dropdown Dark Mode */
+.dark .ant-dropdown-menu {
+  background-color: #1f2937;
+}
+
+.dark .ant-dropdown-menu-item {
+  color: #f9fafb;
+}
+
+.dark .ant-dropdown-menu-item:hover {
+  background-color: #374151;
+}
+
+.dark .ant-dropdown-menu-item-divider {
+  background-color: #374151;
+}
+
+/* Modal Dark Mode */
+.dark .ant-modal-content {
+  background-color: #1f2937;
+}
+
+.dark .ant-modal-header {
+  background-color: #1f2937;
+  border-bottom-color: #374151;
+}
+
+.dark .ant-modal-title {
+  color: #f9fafb;
+}
+
+.dark .ant-modal-close {
+  color: #9ca3af;
+}
+
+.dark .ant-modal-close:hover {
+  color: #f9fafb;
+}
+
+.dark .ant-modal-body {
+  color: #f9fafb;
+}
+
+.dark .ant-modal-footer {
+  border-top-color: #374151;
+}
+
+/* Card Dark Mode */
+.dark .ant-card {
+  background-color: #1f2937;
+  border-color: #374151;
+}
+
+.dark .ant-card-head {
+  background-color: #1f2937;
+  border-bottom-color: #374151;
+  color: #f9fafb;
+}
+
+.dark .ant-card-body {
+  color: #f9fafb;
+}
+
+.dark .ant-collapse-body {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
+
+.dark .ant-modal-container {
+  background-color: #1f2937;
+  color: #f9fafb;
+}
+
+.dark .ant-pagination {
+  background-color: #1f2937;
+  color: #f9fafb;
+  margin: 0 !important;
+  padding: 20px;
+}
+
+*[data-author]{
+  @apply rounded-xl;
+}
+
+*[data-author='me'] {
+  @apply bg-[var(--ant-color-primary)] text-[var(--ant-color-primary-text)] ml-auto ;
+}
