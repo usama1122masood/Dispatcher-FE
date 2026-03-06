@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Tabs,
   Table,
@@ -9,6 +9,7 @@ import {
   Space,
   Typography,
   message,
+  Tag,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -17,11 +18,9 @@ import {
   SoundOutlined,
   PlayCircleOutlined,
   ExportOutlined,
-  AudioOutlined,
-  SoundFilled,
   StopOutlined,
-  WarningOutlined,
-  MessageOutlined,
+  ArrowDownOutlined,
+  ArrowUpOutlined,
 } from "@ant-design/icons";
 import { useAppSelector } from "../../../../store/hooks";
 import { selectIsDarkMode } from "../../../../store/slices/Themeslice";
@@ -29,7 +28,9 @@ import {
   useStartCallMutation,
   useStopCallMutation,
 } from "../../../../store/api/callOperations";
-import { useGetCallRecordsQuery } from "../../../../store/api/dashboardApi";
+import { 
+  useGetCallStatusQuery,
+} from "../../../../store/api/dashboardApi";
 import { ConfirmationModal } from "../../../../components/ui/ConfirmationModal";
 import { CustomButton } from "../../../../components/ui/CustomButton";
 import { POLLING_INTERVAL } from "../../../../utils/global";
@@ -39,97 +40,175 @@ const { TabPane } = Tabs;
 const { Option } = Select;
 const { Text } = Typography;
 
-interface CallRecord {
+type CallType = "PRIVATE" | "GROUP" | "BROADCAST";
+type CallStatus = "IDLE" | "INCOMING" | "OUTGOING";
+
+interface CallHistoryRecord {
   key: string;
   time: string;
   radioId: string;
   type: string;
-  typeColor: string;
   description: string;
+  duration: number;
+  status: "INCOMING" | "OUTGOING";
 }
 
-type CallType = "PRIVATE" | "GROUP" | "BROADCAST";
-
-interface ActiveCall {
-  id: number;
-  callType: CallType;
-}
-
-const getRecentActivityIconByType = (type: string) => {
-  console.debug({ type });
-  switch (type) {
-    case "Alert":
-      return <WarningOutlined />;
-    case "Message":
-      return <MessageOutlined />;
+const getStatusIcon = (status: CallStatus) => {
+  switch (status) {
+    case "INCOMING":
+      return <ArrowDownOutlined className="text-green-500" />;
+    case "OUTGOING":
+      return <ArrowUpOutlined className="text-red-500" />;
     default:
       return <PhoneOutlined />;
   }
 };
 
+const getStatusTag = (status: CallStatus) => {
+  switch (status) {
+    case "INCOMING":
+      return (
+        <Tag color="green" icon={<ArrowDownOutlined />}>
+          INCOMING
+        </Tag>
+      );
+    case "OUTGOING":
+      return (
+        <Tag color="red" icon={<ArrowUpOutlined />}>
+          OUTGOING
+        </Tag>
+      );
+    default:
+      return null;
+  }
+};
+
+const formatDuration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${secs}s`;
+  } else if (minutes > 0) {
+    return `${minutes}m ${secs}s`;
+  } else {
+    return `${secs}s`;
+  }
+};
+
 const CallsManagement: React.FC = () => {
   const isDarkMode = useAppSelector(selectIsDarkMode);
-  const [activeTab, setActiveTab] = useState("recent");
-  const [selectedUnit, setSelectedUnit] = useState("R-101 - Unit Alpha-1");
+  const [activeTab, setActiveTab] = useState("history");
+  const [selectedUnit, setSelectedUnit] = useState("101");
   const [selectedChannel, setSelectedChannel] = useState("Channel");
-  const [volumeLevel, setVolumeLevel] = useState(60);
-  const [micLevel, setMicLevel] = useState(80);
-  const [isTX, setIsTX] = useState(true);
-  const [isRX, setIsRX] = useState(false);
-  const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [pendingCall, setPendingCall] = useState<CallType | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const [startCall, { isLoading: isStarting }] = useStartCallMutation();
   const [stopCall, { isLoading: isStopping }] = useStopCallMutation();
 
-  const { data: callRecords, isLoading } = useGetCallRecordsQuery(undefined, {
-    pollingInterval: POLLING_INTERVAL, // 5 seconds
-    skipPollingIfUnfocused: true, // stops when tab is inactive
+  const radioId = parseInt(selectedUnit, 10);
+
+  const { data: callStatusData, isLoading } = useGetCallStatusQuery(radioId, {
+    pollingInterval: 2000,
+    skipPollingIfUnfocused: true,
   });
 
-  const extractRadioId = (unitString: string): number => {
-    const match = unitString.match(/R-(\d+)/);
-    return match ? parseInt(match[1], 10) : 0;
-  };
+  // Extract current status from backend
+  const currentCallStatus: CallStatus = useMemo(() => {
+    return (callStatusData?.data?.currentStatus?.callType as CallStatus) || "IDLE";
+  }, [callStatusData]);
 
-  const columns: ColumnsType<CallRecord> = [
+  // Find ongoing call from DB records
+  const ongoingCall = useMemo(() => {
+    return callStatusData?.data?.callRecords?.find(
+      (record: any) => record.callActualEndTime === null && 
+      (record.initiative === "INCOMING" || record.initiative === "OUTGOING")
+    );
+  }, [callStatusData]);
+
+  // Get duration from ongoing call in DB
+  const callDuration = useMemo(() => {
+    return ongoingCall?.durationSeconds || 0;
+  }, [ongoingCall]);
+
+  // Check if there's an active call
+  const activeCall = useMemo(() => {
+    if (currentCallStatus === "IDLE") return null;
+    return {
+      id: radioId,
+      callType: "PRIVATE" as CallType,
+    };
+  }, [currentCallStatus, radioId]);
+
+  // Call history from DB records
+  const callHistory: CallHistoryRecord[] = useMemo(() => {
+    if (!callStatusData?.data?.callRecords) return [];
+
+    return callStatusData.data.callRecords.map((record: any, index: number) => {
+      const isIncoming = record.initiative === "INCOMING";
+      const createdAt = new Date(record.createdAt);
+
+      return {
+        key: `${record.id}-${index}`,
+        time: createdAt.toLocaleString(),
+        radioId: `Radio ${record.radioId}`,
+        type: record.initiative,
+        description: record.partnerId && record.partnerId !== 0
+          ? `Call with Radio ${record.partnerId}` 
+          : "Broadcast call",
+        duration: record.durationSeconds || 0,
+        status: isIncoming ? "INCOMING" : "OUTGOING",
+      };
+    });
+  }, [callStatusData]);
+
+  const historyColumns: ColumnsType<CallHistoryRecord> = [
     {
       title: "Time",
       dataIndex: "time",
       key: "time",
-      width: "15%",
+      width: "20%",
     },
     {
       title: "Radio ID",
       dataIndex: "radioId",
       key: "radioId",
       width: "15%",
-      render: (text: string, record: CallRecord) => (
+      render: (text: string, record: CallHistoryRecord) => (
         <div className="flex items-center gap-2">
-          {getRecentActivityIconByType(record.type)}
+          {record.status === "INCOMING" ? (
+            <ArrowDownOutlined className="text-green-500" />
+          ) : (
+            <ArrowUpOutlined className="text-red-500" />
+          )}
           <span>{text}</span>
         </div>
       ),
     },
     {
-      title: "Type",
-      dataIndex: "type",
-      key: "type",
-      width: "15%",
-      render: (text: string, record: CallRecord) => (
-        <span
-          className={`font-medium ${
-            record.typeColor === "orange"
-              ? "text-orange-500"
-              : record.typeColor === "red"
-                ? "text-red-500"
-                : isDarkMode
-                  ? "text-white"
-                  : "text-gray-900"
-          }`}
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      width: "12%",
+      render: (status: "INCOMING" | "OUTGOING") => (
+        <Tag 
+          color={status === "INCOMING" ? "green" : "red"} 
+          icon={status === "INCOMING" ? <ArrowDownOutlined /> : <ArrowUpOutlined />}
         >
-          {text}
+          {status}
+        </Tag>
+      ),
+    },
+    {
+      title: "Duration",
+      dataIndex: "duration",
+      key: "duration",
+      width: "12%",
+      render: (duration: number) => (
+        <span className={isDarkMode ? "text-gray-300" : "text-gray-700"}>
+          {formatDuration(duration)}
         </span>
       ),
     },
@@ -137,12 +216,12 @@ const CallsManagement: React.FC = () => {
       title: "Description",
       dataIndex: "description",
       key: "description",
-      width: "40%",
+      width: "28%",
     },
     {
       title: "Actions",
       key: "actions",
-      width: "15%",
+      width: "13%",
       render: () => (
         <div className="flex gap-2">
           <Button
@@ -169,34 +248,30 @@ const CallsManagement: React.FC = () => {
   ];
 
   const handleStartCall = async (callType: CallType) => {
-    if (activeCall && activeCall.callType !== callType) {
+    if (activeCall && pendingCall !== callType) {
       setPendingCall(callType);
       setShowConfirmModal(true);
       return;
     }
 
-    if (activeCall && activeCall.callType === callType) {
+    if (activeCall) {
       message.warning(`${callType} call is already active`);
       return;
     }
 
-    const radioId = extractRadioId(selectedUnit);
-    if (!radioId) {
+    const currentRadioId = parseInt(selectedUnit, 10);
+    if (!currentRadioId || isNaN(currentRadioId)) {
       message.error("Invalid radio ID selected");
       return;
     }
 
     try {
       const response = await startCall({
-        id: radioId,
+        id: currentRadioId,
         callType,
       }).unwrap();
 
       if (response.success) {
-        setActiveCall({
-          id: 100,
-          callType,
-        });
         message.success(response.message);
       }
     } catch (error: any) {
@@ -214,7 +289,6 @@ const CallsManagement: React.FC = () => {
       }).unwrap();
 
       if (response.success) {
-        setActiveCall(null);
         message.success(response.message);
       }
     } catch (error: any) {
@@ -233,10 +307,9 @@ const CallsManagement: React.FC = () => {
 
       if (stopResponse.success) {
         message.success(stopResponse.message);
-        setActiveCall(null);
 
-        const radioId = extractRadioId(selectedUnit);
-        if (!radioId) {
+        const currentRadioId = parseInt(selectedUnit, 10);
+        if (!currentRadioId || isNaN(currentRadioId)) {
           message.error("Invalid radio ID selected");
           setPendingCall(null);
           setShowConfirmModal(false);
@@ -244,15 +317,11 @@ const CallsManagement: React.FC = () => {
         }
 
         const startResponse = await startCall({
-          id: radioId,
+          id: currentRadioId,
           callType: pendingCall,
         }).unwrap();
 
         if (startResponse.success) {
-          setActiveCall({
-            id: 100,
-            callType: pendingCall,
-          });
           message.success(startResponse.message);
         }
       }
@@ -295,17 +364,6 @@ const CallsManagement: React.FC = () => {
               activeKey={activeTab}
               onChange={setActiveTab}
               type="card"
-              tabBarExtraContent={
-                activeTab === "recent" && (
-                  <Button
-                    type="link"
-                    icon={<SoundOutlined />}
-                    className={isDarkMode ? "text-blue-400" : "text-blue-500"}
-                  >
-                    Recent Calls & Events
-                  </Button>
-                )
-              }
             >
               <TabPane
                 tab={
@@ -320,6 +378,8 @@ const CallsManagement: React.FC = () => {
                   size="large"
                   style={{ width: "100%" }}
                 >
+                  
+
                   <div className="flex gap-3 flex-wrap">
                     {activeCall?.callType === "PRIVATE" ? (
                       <CustomButton
@@ -335,6 +395,7 @@ const CallsManagement: React.FC = () => {
                         icon={<PhoneOutlined />}
                         onClick={() => handleStartCall("PRIVATE")}
                         loading={isStarting}
+                        disabled={currentCallStatus !== "IDLE"}
                       >
                         Private Call
                       </CustomButton>
@@ -354,6 +415,7 @@ const CallsManagement: React.FC = () => {
                         icon={<TeamOutlined />}
                         onClick={() => handleStartCall("GROUP")}
                         loading={isStarting}
+                        disabled={currentCallStatus !== "IDLE"}
                       >
                         Group Call
                       </CustomButton>
@@ -363,35 +425,11 @@ const CallsManagement: React.FC = () => {
                       icon={<SoundOutlined />}
                       onClick={() => handleStartCall("BROADCAST")}
                       loading={isStarting}
-                      disabled={activeCall?.callType === "BROADCAST"}
+                      disabled={currentCallStatus !== "IDLE"}
                     >
                       All Call
                     </CustomButton>
                   </div>
-
-                  {activeCall && (
-                    <div
-                      className={`p-4 rounded-lg ${
-                        isDarkMode
-                          ? "bg-gray-800 border border-gray-700"
-                          : "bg-blue-50 border border-blue-200"
-                      }`}
-                    >
-                      <Text
-                        className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}
-                      >
-                        Active Call:{" "}
-                        <Text
-                          strong
-                          className={
-                            isDarkMode ? "text-blue-400" : "text-blue-600"
-                          }
-                        >
-                          {getCallTypeLabel(activeCall.callType)}
-                        </Text>
-                      </Text>
-                    </div>
-                  )}
 
                   <Row gutter={16}>
                     <Col span={12}>
@@ -401,15 +439,11 @@ const CallsManagement: React.FC = () => {
                         style={{ width: "100%" }}
                         size="large"
                       >
-                        <Option value="R-101 - Unit Alpha-1">
-                          R-101 - Unit Alpha-1
-                        </Option>
-                        <Option value="R-102 - Unit Alpha-2">
-                          R-102 - Unit Alpha-2
-                        </Option>
-                        <Option value="R-103 - Unit Beta-1">
-                          R-103 - Unit Beta-1
-                        </Option>
+                        <Option value="101">Radio 101</Option>
+                        <Option value="102">Radio 102</Option>
+                        <Option value="103">Radio 103</Option>
+                        <Option value="104">Radio 104</Option>
+                        <Option value="105">Radio 105</Option>
                       </Select>
                     </Col>
                     <Col span={12}>
@@ -429,25 +463,26 @@ const CallsManagement: React.FC = () => {
                 </Space>
               </TabPane>
 
-              <TabPane tab="Recent Calls & Events" key="recent">
-                <Table
-                  columns={columns}
-                  dataSource={callRecords ?? []}
-                  size="small"
-                  loading={isLoading}
-                  pagination={{
-                    pageSize: 10,
-                    showSizeChanger: false,
-                    position: ["bottomCenter"],
-                  }}
-                />
+              <TabPane tab="Call History" key="history">
+                <div style={{ maxHeight: '500px', overflowY: 'hidden' }}>
+                  <Table
+                    columns={historyColumns}
+                    dataSource={callHistory}
+                    size="small"
+                    loading={isLoading}
+                    pagination={false}
+                    scroll={{ y: 450 }}
+                  />
+                </div>
               </TabPane>
             </Tabs>
           </div>
         </Col>
 
-        <Col xs={24} lg={8} className="flex items-center">
-          <PushToTalkSection />
+        <Col xs={24} lg={8}>
+          <div className="sticky top-6">
+            <PushToTalkSection />
+          </div>
         </Col>
       </Row>
 

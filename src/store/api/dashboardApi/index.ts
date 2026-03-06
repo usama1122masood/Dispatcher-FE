@@ -1,6 +1,5 @@
 import { apiSlice } from "../apiSlice";
 
-
 export interface DashboardStats {
   totalUsers: number;
   totalOrders: number;
@@ -15,10 +14,41 @@ export interface Activity {
   timestamp: string;
 }
 
-export interface callstatus{
+export interface CallRecord {
+  key: string;
+  time: string;
+  radioId: string;
+  type: string;
+  typeColor: string;
+  description: string;
+  callType: string;
+  partnerId: number | null;
+  duration: number; // in seconds
+  status: "INCOMING" | "OUTGOING";
+}
+
+export interface CallStatusResponse {
   success: boolean;
-  message:string;
-  data:{}
+  message: string;
+  data: {
+    currentStatus: {
+      radioId: number;
+      callType: string;
+      callTypeCode: string;
+      partnerId: number;
+    };
+    callRecords: Array<{
+      id: number;
+      radioId: number;
+      initiative: string;
+      callEndTime: string;
+      partnerId: number | null;
+      createdAt: string;
+      updatedAt: string | null;
+    }>;
+    recordCount: number;
+  };
+  errorCode: string | null;
 }
 
 export const dashboardApi = apiSlice.injectEndpoints({
@@ -29,10 +59,6 @@ export const dashboardApi = apiSlice.injectEndpoints({
     }),
     getRecentActivity: builder.query<Activity[], void>({
       query: () => '/dashboard/activity',
-      providesTags: ['Dashboard'],
-    }),
-    getCallRecords: builder.query<void, void>({
-      query: () => '/api/tlv/call/record',
       providesTags: ['Dashboard'],
     }),
     getAlerts: builder.query<any, void>({
@@ -54,10 +80,10 @@ export const dashboardApi = apiSlice.injectEndpoints({
       query: () => '/api/tlv/system-status',
       providesTags: ['Dashboard'],
     }),
-     getCallStatus: builder.query<callstatus, void>({
-      query: () => '/api/tlv/query/call-status?radioId=9',
-      providesTags: ['Dashboard'],
-    })
+    getCallStatus: builder.query<CallStatusResponse, number>({
+      query: (radioId) => `/api/tlv/query/call-status?radioId=${9}`,
+      providesTags: ['Dashboard', 'CallStatus'],
+    }),
   }),
 });
 
@@ -67,7 +93,6 @@ export const {
   useGetAlertsQuery,
   useDeleteAlertByIdMutation,
   useGetTeamsQuery,
-  useGetCallRecordsQuery,
   useGetStatusBarQuery,
   useGetCallStatusQuery,
 } = dashboardApi;

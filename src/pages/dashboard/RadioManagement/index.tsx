@@ -22,17 +22,17 @@ import {
   useGetRadioDevicesQuery,
   useCallServiceMutation,
 } from "../../../store/api/radioManagementApi";
+import { useGetCallStatusQuery } from "../../../store/api/dashboardApi";
 import AddDeviceModal, { type DeviceFormValues } from "./AddDeviceModal";
 import ViewDetailsModal from "./AddDeviceModal/ViewDetailsModal";
 import RadioConfigModal from "./RadioConfigModal";
 import { POLLING_INTERVAL } from "../../../utils/global";
 
-// Keep these interfaces here
 export interface RadioDevice {
   key: string;
   name: string;
   sector: string;
-  status: "online" | "warning" | "error";
+  status: "online" | "warning" | "error" | "offline";
   signalStrength: string;
   battery: string;
   frequency: string;
@@ -61,14 +61,21 @@ const RadioManagement: React.FC = () => {
     }
   );
 
+  const { data: callStatusData } = useGetCallStatusQuery(9, {
+    pollingInterval: POLLING_INTERVAL,
+    skipPollingIfUnfocused: true,
+  });
+
   const [callService] = useCallServiceMutation();
 
   const stats = useMemo(() => {
     const active = radioDevices.filter((device: RadioDevice) => device.status === "online").length;
     const warnings = radioDevices.filter((device: RadioDevice) => device.status === "warning").length;
     const errors = radioDevices.filter((device: RadioDevice) => device.status === "error").length;
+    const offline = radioDevices.filter((device: RadioDevice) => device.status === "offline").length;
     
     const signalValues = radioDevices
+      .filter((device: RadioDevice) => device.status !== "offline") // Exclude offline devices from signal calculation
       .map((device: RadioDevice) => {
         const match = device.signalStrength.match(/-?\d+/);
         return match ? parseInt(match[0]) : 0;
@@ -83,6 +90,7 @@ const RadioManagement: React.FC = () => {
       active,
       warnings,
       errors,
+      offline,
       avgSignal,
     };
   }, [radioDevices]);
@@ -97,38 +105,52 @@ const RadioManagement: React.FC = () => {
     setIsRadioConfigOpen(true);
   };
 
-  const getMenuItems = (device: RadioDevice): MenuProps["items"] => [
-    {
-      key: "view",
-      label: "View Details",
-      icon: <EyeOutlined />,
-      onClick: () => handleViewDetails(device),
-    },
-    {
-      key: "radio_config",
-      label: "Radio Configuration",
-      icon: <SettingOutlined />,
-      onClick: () => handleRadioConfig(device),
-    },
-    {
-      key: "ping",
-      label: "Ping / Test Connection",
-      icon: <ApiOutlined />,
-      onClick: () => handleCallSerice({ serviceType: "Ping/ test Connection" }),
-    },
-    {
-      key: "refresh",
-      label: "Refresh Status",
-      icon: <SyncOutlined />,
-      onClick: () => handleCallSerice({ serviceType: "Refresh Status" }),
-    },
-    {
-      key: "sync",
-      label: "Sync Time",
-      icon: <ClockCircleOutlined />,
-      onClick: () => handleCallSerice({ serviceType: "Sync Time" }),
-    },
-  ];
+  const getMenuItems = (device: RadioDevice, index: number): MenuProps["items"] => {
+    const baseItems: MenuProps["items"] = [
+      {
+        key: "view",
+        label: "View Details",
+        icon: <EyeOutlined />,
+        onClick: () => handleViewDetails(device),
+      },
+    ];
+
+    // Only show Radio Configuration for Master device (index 0) and if device is online
+    if (index === 0 && device.status !== "offline") {
+      baseItems.push({
+        key: "radio_config",
+        label: "Radio Configuration",
+        icon: <SettingOutlined />,
+        onClick: () => handleRadioConfig(device),
+      });
+    }
+
+    // Only show operational items if device is not offline
+    if (device.status !== "offline") {
+      baseItems.push(
+        {
+          key: "ping",
+          label: "Ping / Test Connection",
+          icon: <ApiOutlined />,
+          onClick: () => handleCallSerice({ serviceType: "Ping/ test Connection" }),
+        },
+        {
+          key: "refresh",
+          label: "Refresh Status",
+          icon: <SyncOutlined />,
+          onClick: () => handleCallSerice({ serviceType: "Refresh Status" }),
+        },
+        {
+          key: "sync",
+          label: "Sync Time",
+          icon: <ClockCircleOutlined />,
+          onClick: () => handleCallSerice({ serviceType: "Sync Time" }),
+        }
+      );
+    }
+
+    return baseItems;
+  };
 
   const columns: ColumnsType<RadioDevice> = [
     {
@@ -139,7 +161,12 @@ const RadioManagement: React.FC = () => {
       render: (text) => (
         <Space>
           <RadiusSettingOutlined className="text-gray-500" />
-          <span className="font-medium">{text}</span>
+          <span className={`font-medium ${
+            callStatusData?.data?.currentStatus?.radioId === parseInt(text.split('-')[1]) && 
+            callStatusData?.data?.currentStatus?.callType === "INCOMING" 
+              ? "text-green-600 font-bold" 
+              : ""
+          }`}>{text}</span>
         </Space>
       ),
     },
@@ -148,15 +175,23 @@ const RadioManagement: React.FC = () => {
       dataIndex: "status",
       key: "status",
       sorter: (a, b) => a.status.localeCompare(b.status),
-      render: (status) => {
+      render: (status, record) => {
+        const isIncomingCall = callStatusData?.data?.currentStatus?.radioId === parseInt(record.name.split('-')[1]) && 
+                               callStatusData?.data?.currentStatus?.callType === "INCOMING";
+        
         const config = {
-          online: { color: "success", icon: "●", text: "Online" },
+          online: { color: isIncomingCall ? "green" : "success", icon: "●", text: isIncomingCall ? "Incoming Call" : "Online" },
+          offline: { color: "default", icon: "●", text: "Offline" },
           warning: { color: "warning", icon: "●", text: "Warning" },
           error: { color: "error", icon: "●", text: "Error" },
         };
         const { color, icon, text } = config[status as keyof typeof config];
         return (
-          <Tag color={color} icon={<span>{icon}</span>}>
+          <Tag 
+            color={color} 
+            icon={<span>{icon}</span>}
+            className={isIncomingCall ? "animate-pulse font-semibold" : ""}
+          >
             {text}
           </Tag>
         );
@@ -168,6 +203,16 @@ const RadioManagement: React.FC = () => {
       key: "signalStrength",
       sorter: (a, b) => a.signalStrength.localeCompare(b.signalStrength),
       render: (text, record, index) => {
+        // Show "N/A" for offline devices
+        if (record.status === "offline") {
+          return (
+            <Space>
+              <SignalFilled className="text-gray-400" />
+              <span className="text-gray-400">N/A</span>
+            </Space>
+          );
+        }
+
         const signalLevel =
           record.status === "online" ? 3 : record.status === "warning" ? 2 : 1;
         return (
@@ -181,7 +226,7 @@ const RadioManagement: React.FC = () => {
                   : "text-red-500"
               }
             />
-            <span>{index === 0 ? "Master" : text}</span>
+            <span>{index === 0 && record.status !== "offline" ? "Master" : text}</span>
           </Space>
         );
       },
@@ -192,6 +237,16 @@ const RadioManagement: React.FC = () => {
       key: "battery",
       sorter: (a, b) => a.battery.localeCompare(b.battery),
       render: (text, record) => {
+        // Show "N/A" for offline devices
+        if (record.status === "offline") {
+          return (
+            <Space>
+              <BatteryFilled className="text-gray-400" />
+              <span className="text-gray-400">N/A</span>
+            </Space>
+          );
+        }
+
         const batteryLevel =
           record.status === "online"
             ? "full"
@@ -219,16 +274,21 @@ const RadioManagement: React.FC = () => {
       dataIndex: "frequency",
       key: "frequency",
       sorter: (a, b) => a.frequency.localeCompare(b.frequency),
+      render: (text, record) => (
+        <span className={record.status === "offline" ? "text-gray-400" : ""}>
+          {text}
+        </span>
+      ),
     },
     {
       title: "Location",
       dataIndex: "location",
       key: "location",
       sorter: (a, b) => a.location.localeCompare(b.location),
-      render: (text) => (
+      render: (text, record) => (
         <Space>
-          <EnvironmentOutlined className="text-gray-500" />
-          <span>{text}</span>
+          <EnvironmentOutlined className={record.status === "offline" ? "text-gray-400" : "text-gray-500"} />
+          <span className={record.status === "offline" ? "text-gray-400" : ""}>{text}</span>
         </Space>
       ),
     },
@@ -237,13 +297,18 @@ const RadioManagement: React.FC = () => {
       dataIndex: "lastSeen",
       key: "lastSeen",
       sorter: (a, b) => a.lastSeen.localeCompare(b.lastSeen),
+      render: (text, record) => (
+        <span className={record.status === "offline" ? "text-gray-400" : ""}>
+          {text}
+        </span>
+      ),
     },
     {
       title: "",
       key: "action",
       width: 50,
-      render: (_, record) => (
-        <Dropdown menu={{ items: getMenuItems(record) }} trigger={["click"]}>
+      render: (_, record, index) => (
+        <Dropdown menu={{ items: getMenuItems(record, index) }} trigger={["click"]}>
           <Button type="text" icon={<MoreOutlined />} />
         </Dropdown>
       ),
@@ -393,6 +458,12 @@ const RadioManagement: React.FC = () => {
               onClick={() => setActiveFilter("online")}
             >
               Active
+            </Button>
+            <Button
+              type={activeFilter === "offline" ? "primary" : "default"}
+              onClick={() => setActiveFilter("offline")}
+            >
+              Offline
             </Button>
             <Button
               type={activeFilter === "warning" ? "primary" : "default"}
